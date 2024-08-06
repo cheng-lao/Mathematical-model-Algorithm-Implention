@@ -41,7 +41,7 @@ if __name__ == "__main__":
     # 使用拉格朗日算法计算插值点
     np.random.seed(114514)
     # 设置随机数种子 方便复现结果! 该种子情况下 可以看出拉格朗日算法会出现龙格效应
-    x_interp = np.random.uniform(-5, 5, 35)
+    x_interp = np.random.uniform(-5, 5, 35)  # 随机生成一些节点
     y_interp = np.array([lagrange_interpolation(x1, y1, i) for i in x_interp])
 
     x_combine = np.concatenate((x1, x_interp))
