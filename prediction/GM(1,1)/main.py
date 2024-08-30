@@ -1,6 +1,6 @@
-#Created by Copilot
+from matplotlib import pyplot as plt 
 import numpy as np
-import pandas as pd
+# import pandas as pd
 import copy
 
 
@@ -19,7 +19,7 @@ def linear_regression(x, y):
     
     return khat, bhat
 
-def GM11(y):
+def GM11(y, predict_length = 0):
     """使用GM11模型生成拟合结果和检测参数平滑度，级比偏差
 
     Args:
@@ -66,38 +66,84 @@ def GM11(y):
     betal = np.linalg.inv(xmat.T @ xmat) @ xmat.T @ ymat
     betal.reshape(2,1)
 
-
     ### 方法2 默认采用方法2
     k, b = linear_regression(z1, y)
-    # 此时得到ymat = kxmat + b + u_i(残差项) 其中求出的k,b可以使得残差项最小
+    # 此时得到ymat = kxmat + b + u_i(残差项) 其中求出的k, b可以使得残差项最小
     ahat = -k
     bhat = b
-    #此时得到k 即是发展系数，b标志灰作用量
-    print("发展系数khat is ",k , " 灰作用量bhat is ", bhat)
     
     ##--------------------残差检验---------------------
-    f = lambda k : (1 - np.exp(ahat)) * (y[0] - bhat/ahat) * np.exp(-ahat * k)
-    fitting_data = [f(m) for m in range(1,length)]
-    print("fitting_data'length  is ", len(fitting_data))
-    print(length -1)
+    f = lambda k : (1 - np.exp(ahat)) * (y[0] - bhat/ahat) * np.exp(-ahat * k)  # 预测函数
+    fitting_data = [f(m) for m in range(1,length)]  
+    # print("fitting_data'length  is ", len(fitting_data))
+    # print(length -1)
     
     
     residual_abs = y - np.array(fitting_data)   # 绝对残差
     residual_r = np.abs(y - np.array(fitting_data)) / y * 100    # 相对残差
     mean_residual_r = np.sum( np.abs( residual_r ) ) / (length - 1)     # 平均相对残差
     
-    ##------------------------级比残差检验-----------------
+    ##-------------------级比残差检验-----------------
     eps = [y_copy[i] / y_copy[i-1] for i in range(1, length)]
     eps = np.array(eps)
     eta = np.abs(1 - ((1 - 0.5*ahat) / (1 + 0.5*ahat)) / eps)
     mean_eta = np.sum(eta) / (length - 1)
     
+    ##-------------------预测-------------------------
+    if predict_length > 0:
+        for i in range(predict_length):
+            fitting_data.append(f(length + i))  # 预测值
+    
+    
     return fitting_data, residual_abs, mean_residual_r, mean_eta, ahat, bhat
-    
-    
-def GMmodel(x):
-    pass
 
+def metabolism_gm11(y, predict_length = 0):
+    """新陈代谢GM模型 只返回预测的结果"""
+    
+    if predict_length <= 0:
+        return GM11(y, predict_length)
+    
+    result = []
+    y_copy = copy.deepcopy(y)
+    
+    for _ in range(predict_length):
+        fitting_data = GM11(y, 1)[0][-1]  # 预测一个值 
+        result.append(fitting_data)
+        y.append(fitting_data)    # 删除最后一个元素
+        y = y[1::]  # 更新y 删除第一个元素
+        
+    result = [*y_copy, *result] # 合并原始数据和预测数据
+    
+    return result
+
+def new_GM(y, threshold):
+    
+    raise NotImplementedError("new_GM is not implemented")
+    
+def GMmodel(x,predict_length = 0):
+    """返回GM(1,1)模型的预测值和检验参数 如果predict_length = 0 则不进行预测，只返回检验参数
+        否则返回预测值和检验参数，同时比较新陈代谢GM模型 ，
+    Args:
+        x(list): original data
+        predict_length(int): 预测长度
+        
+    Returns (tuple): 
+        fitting_data, 拟合值
+        residual_abs, 绝对残差 y - y_hat
+        mean_residual_r, 平均残差
+        mean_eta, 级比残差
+        ahat, 发展系数
+        bhat 灰作用量
+    """
+    
+    raise NotImplementedError("GMmodel is not implemented")
+    
+    
+    return GM11(x, predict_length)
+
+
+def CompareGMmodels(x, threshold):
+    raise NotImplementedError("CompareGMmodels is not implemented")
 
 def testData(x, threshold):
     """Quasi-exponential law test 准指数规律检验
@@ -127,44 +173,70 @@ def testData(x, threshold):
     for i in range(len(eta)):
         if eta[i] >= 1 - 1e-6 and eta[i] <= 1.5 + 1e-6:
             meetCnt += 1
-    
+    ##------------判断是否通过检验-------------------
     if meetCnt / len(eta)  > threshold :
-        return True, meetCnt / len(eta)
+        return True, meetCnt / len(eta), eta
     else:
-        return False, meetCnt / len(eta)
+        return False, meetCnt / len(eta), eta
+    
 
 if __name__ == '__main__':
 
     # 示例数据
     year = range(1995,2005)
-    xdata = [174,179,183,189,207,234,220.5,256,270,285] #';  %原始数据序列，写成列向量的形式（加'就表示转置）
+    xdata = [174,179,183,189,207,234,220.5,256,270,285] #  %原始数据序列，写成列向量的形式（加'就表示转置）
 
     ##---------------根据输入的数据判断是否使用GM模型合适-------------
     if len(xdata) > 12:
         raise Exception("推荐使用其他模型例如 ARIMA， 时间序列分析，温斯特模型，回归模型等")
 
-    testres,score = testData(xdata,0.7)
+    if len(xdata) < 4:
+        raise Exception("数据量太少，无法进行GM模型拟合")
+    
+    
+
+    testres, score, etalist = testData(xdata,0.7)
     if not testres:
         raise Exception(f"不能通过指数平滑检验,得分是{ score }")
     else:
+        ##--------------------通过指数平滑检验: 画图-------------------
+        rogh = etalist - np.ones(len(etalist))
         print(f"通过指数平滑检验，得分是 {score}")
+        plt.figure(1)
+        plt.plot(year[1::], rogh, 'r', label="JiBi Residual")
+        plt.scatter(year[1::], rogh, color = 'r')
+        plt.axhline(y = 0.5, color='orange', linestyle='--', label="y = 0.5")
+        
+        plt.xlabel("year from 1996 to 2005")
+        plt.ylabel("JiBi Residual")
+        plt.grid(True)
+        plt.legend()
+        plt.show()
+        
     
 
 
     # 使用 GM(1,1) 模型进行预测
-    predicted_data, residual_abs, mean_residual_r, mean_eta, ahat, bhat= GM11(xdata)
+    predicted_data, residual_abs, mean_residual_r, mean_eta, ahat, bhat= GMmodel(xdata, 3)
 
     print("原始数据:", xdata)
     print("预测数据:", predicted_data)
+    print("绝对残差:", residual_abs)
+    print("平均残差:", mean_residual_r)
+    print("级比残差:", mean_eta)    
+    print("发展系数:", ahat)
+    print("灰作用量:", bhat)
+    
 
     print(len(xdata))
     print(len(predicted_data))
-    from matplotlib import pyplot as plt 
     
     plt.plot(year,xdata,label="original data",color='r')
     plt.xlabel("original data")
+    plt.scatter(year,xdata,color = 'r')
+    
     plt.plot(year[1::],predicted_data,label="fitting data GM(1,1)",color='b')
-    plt.scatter(year[1::],predicted_data,)
+    plt.scatter(year[1::],predicted_data,color = 'b')
     # for i, txt in enumerate(xdata):
     #     plt.annotate(f'{txt}', (year[i], xdata[i]), textcoords="offset points", xytext=(0,5), ha='center')
     
